@@ -6,14 +6,17 @@
 #' blastall and dotter for some functions.  
 #' 
 #' @export SeqGrapheR
+#' @importFrom utils read.table write.table
+#' @importFrom grDevices dev.off png rgb
+#' @importFrom graphics plot.new points segments plot abline hist par
 #' @import Biostrings
 #' @importFrom gWidgets svalue gconfirm gfile ginput delete gmessage galert dispose ggroup ggraphics gslider glabel gwindow gtable gbutton size addhandlerdestroy gmenu gframe gimage addSpace glayout gtext gstatusbar visible  
-#' @importFrom igraph fastgreedy.community "V<-" community.to.membership  membership vcount graph.data.frame simplify V E get.edgelist neighborhood  degree ecount layout.fruchterman.reingold induced.subgraph    
+#' @importFrom igraph fastgreedy.community "V<-" membership vcount graph.data.frame simplify V E get.edgelist neighborhood  degree ecount layout.fruchterman.reingold induced.subgraph    
 #' @importFrom rggobi edges "edges<-" ids ggobi "glyph_colour<-" "glyph_type<-" "glyph_size<-" glyph_colour ggobi_count ggobi_get glyph_type glyph_size displays pmode ggobi_display_get_tour_projection colorscheme "$<-.GGobi" "[[.GGobi" "ids<-" "[<-.GGobi" "[.GGobi" "[[<-.GGobi" "$<-.GGobi" "[.GGobiData" "[[<-.GGobiData" "[[.GGobiData" "$<-.GGobiData" "$.GGobiData" "variables<-" "shadowed<-" 
 #' @import gWidgetsRGtk2
 #' @import cairoDevice
-#' @importMethodsFrom igraph
-#' @importMethodsFrom rggobi
+## @importMethodsFrom igraph
+## @importMethodsFrom rggobi
 #' @examples 
 #' ## do nut run!
 #' ## SeqGrapheR()
@@ -57,8 +60,7 @@ SeqGrapheR=function(){    # main function
 	fastgreedy=function(GG){
 		eb=fastgreedy.community(GG)
 		cutoff=which(eb$modularity==max(eb$modularity))-1  # select cutoff
-		c2mb=community.to.membership(GG,eb$merges,cutoff)
-		mb=c2mb$membership
+		mb=membership(GG)
 		nc=length(unique(mb))   # number of clusters
 		N=vcount(GG) 
 		new.mb=mb
@@ -314,25 +316,54 @@ SeqGrapheR=function(){    # main function
 	
 	
 # show graph in ggobi 
-	showGraph=function(graphLayout,fgcolor=NULL){
-		gf=graphLayout$L
-		rownames(gf)=V(graphLayout$G)$name
-		ggobiObject=ggobi(gf)
-		
-		
-		#display edges:
-		if (gconfirm(message='Include edges in the graph?\n\n(can be computationaly / memory demanding)',icon='warning')){
-			weight=E(graphLayout$G)$weight
-			ggobiObject$whg=data.frame(weight)
-			e=get.edgelist(graphLayout$G);rownames=c('src','dest')
-			edges(ggobiObject$whg)=e
-		}
-		if (!is.null(fgcolor)){
-			glyph_colour(ggobiObject[1])=fgcolor
-		}
-		#gd=displays(ggobiObject)[[1]]
-		#pmode(gd) = 'Rotation'
-		ggobiObject
+        # added to show pairs edges in graph:
+        get_pairs=function(GL){
+                                        # check if last character label pair
+            label = substring(V(GL$G)$name,nchar(V(GL$G)$name))
+            if (length(unique(label))==2){
+                id=gsub(".{1}$","",V(GL$G)$name)
+                tbl = table(id, label)
+                tbl=tbl[tbl[,1]==1 & tbl[,1]==1,][]
+                v1 = paste(rownames(tbl),label[1],sep="")
+                v2 = paste(rownames(tbl),label[2],sep="")
+                return(cbind(v1,v2))
+            }else{
+                return(NULL)
+            }
+            
+        }
+
+
+
+        showGraph=function(graphLayout,fgcolor=NULL){
+            gf=graphLayout$L
+            rownames(gf)=V(graphLayout$G)$name
+            ggobiObject=ggobi(gf)
+
+            
+                                        #display edges:
+            if (gconfirm(message='Include edges in the graph?\n\n(can be computationaly / memory demanding)',icon='warning')){
+                weight=E(graphLayout$G)$weight
+                ggobiObject$whg=data.frame(weight)
+                e=get.edgelist(graphLayout$G);rownames=c('src','dest')
+                edges(ggobiObject$whg)=e
+            }
+
+                                        # pair edges, make it optional - it slows import:
+            ep = get_pairs(graphLayout)
+            if (!is.null(ep)){
+                if (gconfirm(message='Include edges for read pairs?)',icon='warning')){
+                    ggobiObject$pairs = data.frame(weight = rep(1,nrow(ep)))
+                    edges(ggobiObject$pairs) = ep
+                }
+            }
+            
+            if (!is.null(fgcolor)){
+                glyph_colour(ggobiObject[1])=fgcolor
+            }
+                                        #gd=displays(ggobiObject)[[1]]
+                                        #pmode(gd) = 'Rotation'
+            ggobiObject
 	}
 	
 	defHandlerAdd2Editor=function(h,...){
